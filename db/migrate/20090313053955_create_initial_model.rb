@@ -31,6 +31,7 @@ class CreateInitialModel < ActiveRecord::Migration
     add_column(:users, :web_site_url, :string)
     add_column(:users, :phone_number, :string)
     add_column(:users, :notify_advocacy, :boolean)
+ 	add_column(:users, :special_msg, :string)						#!! saver writes special_msg 
 
     create_table :payment_notifications do |t|
       t.text :raw_data
@@ -67,6 +68,7 @@ class CreateInitialModel < ActiveRecord::Migration
     remove_column(:users, :asset_type_id)
     remove_column(:users, :requested_match_cents)
     remove_column(:users, :type)
+    remove_column(:users, :special_msg)							#!! saver writes special_msg 		
     drop_table :asset_types
     drop_table :line_items
     drop_table :invoices

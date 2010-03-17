@@ -63,5 +63,11 @@
                 = select :saver, :asset_type_id, AssetType.all.collect {|p| [ p.asset_name, p.id ] }, { :include_blank => true }
             %tr
               %td{:align => "right"}
+                %p.large-text
+                  = "Special Message to Donor:"
+              %td{:align => "left"}
+                = text_area :saver, :special_msg, :style => "width:91%; height: 3em; margin: 10px 0 10px 0;"                             
+            %tr
+              %td{:align => "right"}
                 = submit_tag :save_changes.l
               %td{:align => "right"}

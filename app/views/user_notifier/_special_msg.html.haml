@@ -1,0 +1,14 @@
+-#!! special message from saver
+.special_msg
+  %blockquote
+    - if donation.to_user.class == Saver && donation.to_user.special_msg
+       %tr
+      	 %td
+          From:
+          = h donation.to_user.first_name
+      	  %br
+      	 %td
+          = h donation.to_user.special_msg
+      	  %br
+       %br
+

@@ -1,0 +1,179 @@
+{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0\fnil\fcharset0 Courier New;}{\f1\fswiss\fcharset0 Arial;}{\f2\froman\fcharset0 Times New Roman;}{\f3\fswiss\fprq2\fcharset0 Arial;}}
+{\*\generator Msftedit 5.41.21.2509;}\viewkind4\uc1\pard\lang1033\f0\fs20 modify st/.git/config/config file\par
+\par
+forked from tbostelmann/st\par
+\tab git clone git@github.com:eucephei/st.git\tab\tab <- ONE TIME ONLY\par
+\tab cd C:\\Users\\ace\\st\\.git\\config\par
+\par
+cd st\par
+ls\par
+\tab git pull tom master\tab\tab\tab\tab\tab <- UPDATE\par
+\tab git push \par
+\par
+Right click on st folder, 'Git GUI here'\par
+\par
+\par
+rake gems:install\par
+\par
+################################################################\par
+\f1\par
+You should be able to fork the repository without obtaining write\par
+access to my repository.  The strategy here is to fork your own\par
+version of the repo, make changes, check them in to your own\par
+repository, then send a 'pull request' to me.  Jeremy and I can then\par
+review the code and merge it into the main branch if necessary.\par
+\par
+1.) Fork tbostelmann\\st (there should be a 'fork' button in the upper\par
+right hand corner - you'll need to be logged in to do this as well).\par
+\par
+2.) Clone your version of the repo (this should be something like\par
+'eucephei\\st').\par
+\par
+git clone git@github.com:eucephei/st.git\par
+\par
+NOTE: if you have already cloned my version of the code, you can move\par
+the repository to the side (mv st st_old) so that your cloned version\par
+will replace it.  Copy config/database.yml and config/application.yml\par
+over and everything should work on your existing development database\par
+(so you don't have to re-do a lot of steps).\par
+\par
+3.) Make changes to the code as needed.  You can commit these to your\par
+local version of the repository by executing the following commands:\par
+\par
+git add .\par
+git commit -m "commit comment"\par
+\par
+4.) You might want to periodically 'push' your local changes up to\par
+your repository:\par
+\par
+git push origin master\par
+\par
+NOTE: if you push your changes up to the repository it makes it easier\par
+to talk about the changes you have made as I'll be able to look at the\par
+change history for your repository.\par
+\f2\fs24\par
+\pard\sb100\sa100 HAML USE FILTER  p 490\par
+SAVER WRITE RESPONSE \par
+RESPONSE ADD TO HAML\par
+HAML FORWARD TO EMAIL\par
+a) MIGRATION ADD CUSTOM MESSAGE, BUT NEED A DEFAULT?\par
+Dylan, can you come up with copy for what the message should read?  I'm thinking that the current message that is sent out should just have a message at the end of it saying something like:\par
+"Here are messages from individual Savers:\par
+David says:\par
+Thank you so much for your contribution......\par
+Linda says:\par
+Thank you for helping me work towards my goal...."\par
+\par
+b) UI LET SAVER TO EDIT MESSAGE?\par
+Yes.  This should be added to the existing ui for editing saver profiles.\par
+\par
+c) DO USE 'REST'? \par
+( URL TO HAML MESSAGE  CONTROLLER\\ACTION\\CUSTOM_MESSAGE)\par
+I'm not sure I understand.  There's a trigger that initiates the email message when a donation is made that will kick off an email message.  The existing email message needs to be refactored to add the custom message.\par
+ \par
+d) UPON DONATION, SEND THE CUSTOM/DEFAULT MESSAGE?\par
+Yes.\par
+script/generate plugin XXX \tab\tab # VENDOR/PLUGIN\par
+\pard\f3\fs20\par
+##########################################################################\par
+\par
+First my apologies for the previous dilettante questions.\par
+\par
+1) Please do give a list of gems required for this app. ie. haml, money\par
+2) For Database support, do you have sample scripts for inserting  to Sqllite?\par
+3) ls it possible to to run the rails app without building rails app from scratch? If so, what are the best ways to proceed?  \par
+4) What additional references do you recommend to read to do the stories?\par
+\par
+HAML vs HTML.ERB\par
+\par
+VIEW\par
+\par
+app/views/user_notifier/donation_thanks_notification.html.haml\tab\tab DEFAULT MESSAGE\par
+\par
+CONTROLLER\par
+\par
+app/controllers/pledge_controller.rb\par
+\par
+TEST\par
+\par
+test/functional/pledge_controller_test.rb\par
+\par
+##############################################################################\par
+\par
+Regarding \b Story #478 \b0\par
+\par
+"When donors donate to a Saver, a custom message should be inserted into the 'thank you' email message (one for each saver that is donated to),"\par
+\par
+1) What is the custom message?\par
+\par
+The custom message should be a merge of the existing email and the custom message for each Saver that received a donation.\par
+ \par
+THAT IS, THE MERGE OF donation_thanks_notification.html.haml AND EXISTING EMAIL?\par
+\par
+THAT IS, INSTEAD OF STANDARDIZED donation_thanks_notification.html.haml, ONE SHOULD HAVE SAVER TO DO A CUSTOM MESSAGE.\par
+\par
+a) MIGRATION ADD CUSTOM MESSAGE TO NEED A DEFAULT\par
+b) UI LET SAVER TO EDIT MESSAGE\par
+c) DO USE 'REST'? \par
+( URL TO HAML MESSAGE  CONTROLLER\\ACTION\\CUSTOM_MESSAGE)\par
+d) UPON DONATION, SEND THE CUSTOM/DEFAULT MESSAGE\par
+\par
+2) How can donation_thanks_notification.html.haml be linked to likes of pledge_controller_test.rb or pledge_controller.rb? Spefically, is it stored in @emails?\par
+\par
+That is a good question - this is a tricky part.  In config/environments/test.rb the following lines set global variables when in the 'test' environment:\par
+\par
+config.action_mailer.perform_deliveries = true\par
+config.action_mailer.delivery_method = :test\par
+\par
+They essentially tell the base functional test class to store messages that were delivered in class variable called, appropriately, @emails.  So it just appears to magically get assigned when in fact it's a configuration option ;)\par
+ \par
+SEE AGILE ACTION MAILER p. 663\par
+\par
+3)  I have notice that some functions, like 'add_donation_to_pledge', 'update_pledge_with_donor', 'paypal_redirect_param', 'set_donor_in_pledge' in pledge_contrller was not tested pledge_controller_test.rb, should I test it?\par
+\par
+YES!  Please feel free to clean up sloppy code and create tests.  You will probably find plenty of it in this project as this was my first experience with Rails :)\par
+ \par
+4) In  pledge_controller_test.rb, why is @emails cleared immediately after ActionMailer::Base.deliveries during setup?\par
+\par
+Another good question.  I'm resetting the variable for good measure.  I just wanted to make sure I wasn't getting any other email messages being sent.  Adding a check to assert this in the test instead of avoiding it would probably have been better but I didn't get around to it.\par
+\par
+SEE AGILE ACTION MAILER p. 624 \par
+\par
+5) For existing tests in pledge_controller_test.rb, are they functional already? \par
+\par
+All tests should pass at this point.  I religiously run tests for every push (checkin).\par
+\par
+##############################################################################\par
+\par
+1) Please do give a list of gems required for this app. ie. haml, money\par
+\par
+There's a handy rake command that will tell you this:\par
+\par
+rake gems\par
+\par
+It also helps to run it while in the test environment as there are gems that are required only there:\par
+\par
+rake gems RAILS_ENV=test\par
+\par
+STUDY RAKE GEMS\par
+ \par
+2) For Database support, do you have sample scripts for inserting  to Sqllite?\par
+\par
+I do not.  My recommendation is to install Postgres (preferred) or Mysql (Mysql has a windows installer that should make it pretty straight forward).  Please let me know if you have questions about this specifically.A\par
+\par
+STUDY POSTGRES\par
+\par
+3) ls it possible to to run the rails app without building rails app from scratch? If so, what are the best ways to proceed?  \par
+\par
+Hmm...rails has a pretty good framework for getting your app up and running.  I understand there may be a few steps but my suggestion is to try to work through them and email me with questions.\par
+ \par
+NEED HELP\par
+\par
+4) What additional references do you recommend to read to do the stories?\par
+\par
+\par
+\par
+\par
+\f1\par
+}
+ 

@@ -259,8 +259,9 @@ module ActiveSupport
     end
 
     def to_i
-      utc.to_i
+     utc.is_a?(DateTime) ? utc.to_f : utc.to_i		#!! patch for to_i
     end
+    		
     alias_method :hash, :to_i
     alias_method :tv_sec, :to_i
 

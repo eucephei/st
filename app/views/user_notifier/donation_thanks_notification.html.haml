@@ -22,3 +22,12 @@
 ="Donation Amount: #{@amount.format(:html)}"
 =""
 ="*This email serves as your acknowledgment letter for IRS purposes."
+=""
+ 
+-#!! special message haml
+- @donations_sorted_for_display.each do |donation|
+  = render :partial => 'user_notifier/special_msg', :locals => {:donation => donation}
+
+
+
+

@@ -47,6 +47,7 @@
 #  notify_advocacy           :boolean(1)
 #  short_description         :string(255)
 #  featured_user             :boolean(1)      default(TRUE)
+#  special_msg				 :string(255)
 #
 
 class Saver < Party
