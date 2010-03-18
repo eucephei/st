@@ -44,6 +44,11 @@ class DonorNotifierTest < ActiveSupport::TestCase
     #assert_match /Date: #{formatted_date}/, notification.body
     assert_match /Donation Amount: \$#{@pledge.total_amount}/, notification.body
     assert_match /\*This email serves as your acknowledgment letter for IRS purposes./, notification.body
+    
+    assert_match /Rosanna/, @pledge.donations[1].to_user.first_name
+    assert_match /Many thanks from Rosanna!/, @pledge.donations[1].to_user.special_msg	
+    
+    
   end
   
   test "Reset password email is templated" do
