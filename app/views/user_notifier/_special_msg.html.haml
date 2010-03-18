@@ -1,16 +1,14 @@
 -#!! special message from saver
-.special_msg
-  %blockquote
-    - if donation.to_user.is_a? Saver && donation.to_user.special_msg
+  .special_msg
+    %blockquote
+      - if donation.to_user.is_a? Saver && donation.to_user.special_msg
       %tr
         %td
           From:
           = h donation.to_user.first_name
         %br
-        %td
-          %li 
-            = h donation.to_user.special_msg
+        %td 
+          = h donation.to_user.special_msg
         %br
-
-
+ 
 
