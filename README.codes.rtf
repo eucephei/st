@@ -1,0 +1,879 @@
+{\rtf1\ansi\ansicpg1252\deff0\deflang1033{\fonttbl{\f0\fnil\fcharset0 Arial;}}
+{\colortbl ;\red255\green0\blue0;\red0\green0\blue255;\red0\green0\blue0;\red102\green26\blue51;}
+{\*\generator Msftedit 5.41.21.2509;}\viewkind4\uc1\pard\sa200\sl276\slmult1\lang1036\fs18 midas+angelaw@savetogether.org \tab\tab\tab\tab saver\par
+jumaventures+rosannab@savetogether.org\tab\tab\tab saver\par
+eucephei@gmail.com\tab\tab\tab\tab\tab donor\par
+\pard C:\\Users\\user\\st>ruby script/console\par
+\par
+>> Saver.find(:all)\par
+\par
+\pard\sa200\sl276\slmult1 The next step is testing emails:\par
+1) In \\test\\unit\\donor_notifier_test.rb. we can use "Donor thank you email is templated" test. To define special_msg for  users(:deserving_saver_1), should we modify deserving_saver_<%= i %> in \\test\\fixtures\\users.yml to have a special_msg? i.e. special_msg: Walter special message\par
+2) In \\test\\functional\\pledges_controller_test, you mentioned I can use @emails = ActionMailer::Base.deliveries as basis for testing. I see\par
+    assert_equal "[SaveTogether] Thank you for your donation!", @emails[0].subject\par
+What references would you recommend so we can also test @emails[0].body?\par
+\pard 3) Beside unit and functional tests, can we place this on websites like Heroku so we can test actual email reception?\par
+\par
+\\app\\views\\savers\\edit.html.haml\par
+\\db\\migrate\\20090313053955_create_initial_model.rb\par
+\par
+    -# Donations Table\par
+    - @pledge.donations_sorted_for_display.each do |donation|\par
+      = render :partial => 'pledges/invoice/donation/donation', :locals => \{:donation => donation\}\par
+\par
+    - @pledge.donations_sorted_for_display.each do |donation|\par
+      = render :partial => 'user_notifier/special_msg', :locals => \{:donation => donation\}\tab\par
+\par
+<blockquote>\par
+\par
+   <% if donation.to_user.class == Saver && donation.to_user.special_msg %>\par
+   <tr>\par
+       <td>From: <%=h donation.to_user.first_name %></td><br>\par
+       <td><%=h donation.to_user.special_msg %></td><br><br>\par
+    </tr>\par
+    <% end %>\par
+\par
+</blockquote>\par
+\par
+<blockquote>\par
+<% @donations.each do |donation| %>\par
+   <% if donation.to_user.class == Saver && donation.to_user.special_msg %>\par
+   <tr>\par
+       <td>From: <%=h donation.to_user.first_name %></td><br>\par
+       <td><%=h donation.to_user.special_msg %></td><br><br>\par
+    </tr>\par
+    <% end %>\par
+<% end %>\par
+</blockquote>\par
+\par
+\par
+\par
+###########################################################################\par
+0)  in \\db\\config\\route.rb, we add following\par
+\par
+  # nested resource allows folks to add special message to saver\par
+  map.resources :savers do |saver|\par
+\tab saver.resources :special_msgs\par
+  end  \par
+\par
+\par
+##############################################################################\par
+\par
+ add_column(:users, :special_msg, :text)\tab\tab\tab # saver writes special_msg\par
+\par
+2) Then in \\app\\controllers\\pledge_controller.rb\par
+\par
+  def new\par
+    @saver = Saver.find(params[:saver_id])\par
+    @user = current_user\par
+    @storg = Organization.find_savetogether_org\par
+    @pledge = Pledge.new\par
+\par
+  end\par
+\par
+  def add_donation_to_pledge\par
+    @pledge = get_or_init_pledge\par
+     if params[:donation]\par
+      donation = Donation.new(params[:donation])\par
+      @pledge.add_donation(donation)\par
+      @pledge.save!\par
+      @pledge = get_pledge\par
+    end\par
+  end\par
+\par
+2) Then in \\app\\model\\saver.rb,\par
+\par
+  def find_special_msg_with_to_user_id(saver_id) \par
+     if id ==  saver_id\par
+\tab return special_msg\par
+     end\par
+     return ""\par
+  end\par
+\par
+I am considering 2 approaches to the special message problem, but both have their own difficulties that I hope your inputs would be helpful:\par
+\par
+0) In \\db\\migrate\\20090313053955_create_initial_model.rb, we have line_items, the parent class of donations, should we add:\par
+\par
+ create_table :line_items do |t|\par
+      ...\par
+      t.integer \tab :invoice_id\par
+      t.text\tab :special_msg\par
+ end\par
+___________________________________________________________________________\par
+\par
+I. merely extract the special message from each donation without considering how to let the saver write it:\par
+\par
+1a) In \\vendor\\plugins\\community_engine\\app\\models\\user_notifier.rb, suppose we set donations to pledge.donations:\par
+\par
+  def\cf1  donation_thanks_notification(donor, pledge)\par
+\cf0     ...\par
+    @body[:donations] = pledge.donations\par
+  end\par
+\par
+1b) Then In \\app\\views\\user_notifier\\donation_thanks_notification.html.haml, if we want to extract special_msg from each donation, is adding the following valid?\par
+\par
+- unless @donations.empty?\par
+      - @donations.each do |donation|\par
+        %tr\par
+        %td.to_user\tab\tab\tab\tab\tab # saver\par
+          = donation.to_user_display_name\tab\tab\tab # saver's name\par
+        %td.special_msg\par
+          = donation.special_msg\tab\tab\tab\tab # saver's special message\par
+      - end\par
+- else \par
+\par
+2) Now, how should we insert special_msg into each donation?\par
+_____________________________________________________________________________\par
+\par
+II. The other makes use of NESTED RESTFUL, but is more complicated:\par
+\par
+1) In \\config\\route.rb, I noticed pledges is not RESTFUL, but is having a nested resource special_msgs inside pledges possible?\par
+\par
+  #  map.resources  :pledges\par
+  map.new           '/pledges/new/:saver_id', :controller => 'pledges', :action => 'new'\par
+  map.create        '/pledges/create',           :controller => 'pledges', :action => 'create'\par
+  map.done          '/pledges/done',             :controller => 'pledges', :action => 'done'\par
+  map.cancel       '/pledges/cancel',           :controller => 'pledges', :action => 'cancel'\par
+  map.notify         '/pledges/notify',             :controller => 'pledges', :action => 'notify'\par
+\par
+  # nested resource possible?\par
+  map.resources :pledges do |pledge|\par
+\tab pledge.resources :special_msgs\par
+  end  \par
+\par
+2) Obviously we need a special_msgs_controller.rb, but we need to also set the models\par
+\\app\\model\\pledge.rb and \\app\\model\\special_msg.rb\par
+\par
+class Pledge < Invoice\par
+  has_many\tab :special_msgs\par
+  ... \par
+end\par
+\par
+class SpecialMsg\par
+  belongs_to \tab :pledge\par
+  ... \par
+end\par
+\par
+3a) In \\vendor\\plugins\\community_engine\\app\\models\\user_notifier.rb, suppose we set donations to pledge.donations:\par
+\par
+  def\cf1  donation_thanks_notification(donor, pledge)\par
+\cf0     ...\par
+    @body[:special_msgs] = pledge.special_msgs\par
+    @body[:pledge] = pledge\par
+  end\par
+\par
+3b) Then In \\app\\views\\user_notifier\\donation_thanks_notification.html.haml, if we want to extract special_msg from each donation, are adding the any of the following valid?\par
+\par
+- unless @special_msgs.empty?\par
+\tab = render :partial => "/special_msgs/special_msg",  :collection => @special_msgs\par
+- else \par
+\par
+OR\par
+\par
+- unless @pledge.special_msgs.empty?\par
+\tab = render :partial => "/special_msgs/special_msg",  :collection => @pledge.special_msgs\par
+- else \par
+\par
+\par
+\par
+\par
+###########################################################################\par
+\par
+> @user refer to @body[:user] in user_notifier.rb\par
+\par
+> In \\test\\unit\\donor_notifier.test,  users(:deserving_saver_1) should refer to a fixture in the test/fixtures directory.\par
+\par
+> In \\vendor\\plugins\\community_engine\\app\\models\\user_notifier.rb, body[:url] =  "#\{APP_URL\}" set in config/environment.rb. APP_URL = AppConfig.app_url\par
+\par
+> In \\vendor\\plugins\\community_engine\\app\\models\\user_notifier.rb,  extract the special_msg from pledge which has saver info\par
+\par
+##############################################################################\par
+\par
+\\db\\migrate\\20090313053955_create_initial_model.rb\par
+\par
+    add_column(:users, :type, :string)\par
+    add_column(:users, :requested_match_cents, :integer)\par
+    add_column(:users, :asset_type_id, :integer)\par
+    add_column(:users, :organization_id, :integer)\par
+    add_column(:users, :first_name, :string)\par
+    add_column(:users, :last_name, :string)\par
+    add_column(:users, :web_site_url, :string)\par
+    add_column(:users, :phone_number, :string)\par
+    add_column(:users, :notify_advocacy, :boolean)\par
+\par
+\\db\\migrate\\20090911233029_add_summary_attribute_to_user\par
+\par
+    add_column(:users, :short_description, :string)\par
+\par
+\\db\\migrate\\20090929190427_add_featured_flag_to_user.rb\par
+\par
+    add_column(:users, :featured_user, :boolean, :default => true)\par
+\par
+\par
+\\app\\models\\pledge.rb\par
+\par
+def process_paypal_notification(notify)\par
+    ....\par
+    if notify.status == LineItem::STATUS_COMPLETED\par
+    \cf1   UserNotifier.deliver_donation_thanks_notification(donor, self)\par
+\cf0     end\par
+end\par
+\par
+\\test\\unit\\donor_notifier_test.rb\par
+\par
+  @donor = Donor.new(\{:first_name => "Newt",\par
+    :last_name => "Donor",\par
+    :login => "foo@bar.com",\par
+    :login_confirmation => "foo@bar.com",\par
+    :password => "foo2thebar",\par
+    :password_confirmation => "foo2thebar",\par
+    :birthday => 21.years.ago\par
+    \})\par
+    @donor.save!\par
+    \par
+    @pledge = Pledge.create!(:donor => @donor)\par
+\cf1     @pledge.donations \cf0 <<\cf1  Donation.new(:from_user => @donor, :to_user => users\tab (:deserving_saver_1), :cents => "5000")\par
+    @pledge.donations\cf0  << \cf1 Donation.new(:from_user => @donor, :to_user => \tab Organization.find_savetogether_org, :cents => "500")\par
+\cf0     @pledge.save!\par
+\par
+\\vendor\\plugins\\community_engine\\app\\models\\user_notifier.rb\par
+\par
+  def\cf1  donation_thanks_notification(donor, pledge)\par
+\cf0     setup_email(donor)\par
+    @subject      += :notification_donation_thanks_subject.l\par
+    @body[:url]    = "#\{APP_URL\}"\par
+    @body[:amount] = pledge.total_amount\par
+    @body[:date]   = pledge.created_at\par
+  end\par
+\par
+  protected\par
+  def setup_email(user)\par
+    @recipients  = "#\{user.email\}"\par
+    setup_sender_info\par
+    @subject     = "[#\{AppConfig.community_name\}] "\par
+    @sent_on     = Time.now\par
+    @body[:user] = user\par
+  end\par
+\par
+  def setup_sender_info\par
+    @from       = "The #\{AppConfig.community_name\} Team <#\{AppConfig.support_email\}>"\par
+    headers     "Reply-to" => "#\{AppConfig.support_email\}"\par
+    @content_type = "text/plain"\par
+  end\par
+\par
+############################################################################\par
+\par
+  def donation_thanks_notification(donor, pledge, special_msg)\tab\tab\tab ???\par
+    setup_email(donor)\tab\tab\tab\tab\par
+    @subject      += :notification_donation_thanks_subject.l\par
+    @body[:url]    = "#\{APP_URL\}"\tab\tab\tab\tab\tab\par
+    @body[:amount] = pledge.total_amount\par
+    @body[:date]   = pledge.created_at\par
+\par
+\cf1      content_type  "multipart/alternative"\tab\tab\tab\tab\tab    \tab ???\par
+     part :content_type => "text/html",\par
+        :body => rend\cf0 http://localhost:3000/do-more\tab\tab\tab input form\cf1 er_message("signup-as-html", :account => special_msg) \tab ???\par
+\par
+     part "text/plain" do |p\par
+        p.body = render_message("signup-as-plain", :account => special_msg)\tab ???\par
+      end\cf0\par
+\par
+  end\par
+\par
+app/controllers/pledge_controller.rb\par
+\par
+\par
+test/functional/pledge_controller_test.rb\par
+\par
+##############################################################################\par
+\par
+\\test\\fixtures\\users.yml \tab\tab\tab\tab # various savers/donors\par
+\par
+  saver6:\par
+  \tab login: saver6@example.com\par
+  \tab first_name: Super\par
+  \tab last_name: Saver6\par
+  \tab description: I am an friggin awesome gal of a certain age\par
+  \tab salt: 7e3041ebc2fc05a40c60028e2c4901a81035d3cd\par
+  \tab crypted_password: 00742970dc9e6319f8019fd54864d3ea740f04b1 # test\par
+  \tab created_at: <%= 5.days.ago.to_s :db %>\par
+  \tab activated_at: <%= 5.days.ago.to_s :db %>\par
+  \tab activation_code:\par
+  \tab state: california\par
+ \tab metro_area: sanfrancisco\par
+  \tab profile_public: true\par
+  \tab login_slug: saver6\par
+  \tab birthday: <%= 40.years.ago.to_s :db %>\par
+  \tab gender: F\par
+  \tab activities_count: 0\par
+  \tab role_id: 3\par
+  \tab asset_type: home\par
+  \tab organization: earn\par
+  \tab requested_match_cents: 400000\par
+  \tab type: Savers\par
+\par
+##############################################################################\par
+\par
+c:\\Users\\ace\\st>perl -w find.pl process_paypal_notification rb\par
+\par
+\\app\\controllers\\pledges_controller.rb\par
+\par
+  def handle_notification(pledge, notification)\par
+    Pledge.transaction do\par
+     \cf1  pledge.process_paypal_notification(notification)\par
+\cf0       pledge.save!\par
+      unless ENV['RAILS_ENV'] == 'test' || notification.acknowledge\par
+        raise RuntimeError, :runtime_error_notification_acknowledge_failed.l\par
+      end\par
+    end\par
+  end\par
+\par
+\\app\\models\\pledge.rb\par
+\par
+ def process_paypal_notification(notify)\par
+    # Verify Donation values against payment notification values\par
+    # Then update status\par
+    index = 1\par
+    while item_number = notify.params["item_number#\{index\}"]\par
+      saver = User.find(item_number)\par
+      if saver.nil?\par
+        raise ArgumentError, :argument_error_beneficiary_with_id_in_notification_not_found.l(\par
+\tab :id => item_number)\par
+      end\par
+\par
+      amount = notify.params["mc_gross_#\{index\}"]\par
+      line_item = self.line_items.find(:first, :conditions => \{:to_user_id => saver.id\})\par
+      if (line_item.nil?)\par
+        raise "LineItem for user #\{saver.id\} not found"\par
+      end\par
+      line_item.status = notify.status\par
+      line_item.save!\par
+      index = index + 1\par
+    end\par
+\par
+    # Add reported Fee if it hasn't been reported already\par
+    amount = notify.fee\par
+    unless amount.nil?\par
+      paypal = Organization.find_paypal_org\par
+      fee = self.fees.find(:first, :conditions => \{:to_user_id => paypal\})\par
+      if fee.nil?\par
+        storg = Organization.find_savetogether_org\par
+        self.fees << Fee.new(:from_user => storg, :to_user => paypal,\par
+                :amount => amount, :status => notify.status)\par
+      else\par
+        fee.amount = amount\par
+        fee.status = notify.status\par
+        fee.save!\par
+      end\par
+    end\par
+\par
+    if notify.status == LineItem::STATUS_COMPLETED\cf1\par
+      UserNotifier.deliver_donation_thanks_notification(donor, self)\cf0\par
+    end\par
+  end\par
+\par
+\\test\\unit\\payment_notification_test.rb\par
+\par
+    paypal = users(:paypal)\par
+    saver = users(:saver2)\par
+    pn = PaymentNotification.create(:raw_data => ....)\par
+    pledge.process_paypal_notification(pn.notification)\par
+\par
+\\test\\unit\\pledge_test.rb\par
+\par
+  test "find donation with same to_user_id" do\par
+    pledge = invoices(:pledge)\par
+    donation = pledge.donations[0]\par
+    d = pledge.find_line_item_with_to_user_id(donation.to_user_id)\par
+    assert d.to_user_id == donation.to_user_id    \par
+  end\par
+\par
+test "create initial pledge with no status" do\par
+    donor = users(:donor4)\par
+    saver = users(:saver4)\par
+    pledge = Pledge.create!(:donor => donor)\par
+    pledge.donations << Donation.new(:from_user => donor, :to_user => saver, :amount => "50")\par
+    pledge.donations << Donation.new(:from_user => donor, :to_user => \tab\tab\tab Organization.find_savetogether_org, :amount => "5")  \par
+    pledge.save\par
+\par
+    # Reload pledge and assert it's values\par
+    pledge = Pledge.find(pledge.id)\par
+    assert !pledge.nil?\par
+\par
+    test_pledge_no_fees(pledge)\par
+\par
+    # Use donor to find pledge and assert they're the same\par
+    donor = Donor.find(donor.id)\par
+    assert !donor.pledges.empty?\par
+    d_pledge = donor.pledges[0]\par
+    d_pledge.id == pledge.id\par
+\par
+    test_pledge_no_fees(d_pledge)\par
+  end\par
+\par
+ def initialize_test_pledge(st_ask=100)\par
+    @donor  = users(:donor)\par
+    @saver1 = users(:saver)\par
+    @saver2 = users(:saver2)\par
+    @saver3 = users(:saver3)\par
+    @saver4 = users(:saver4)\par
+    @storg  = users(:savetogether)\par
+    \par
+    pledge = Pledge.create!\par
+    pledge.donations << Donation.suggest_percentage_of(@donor.id, @storg.id,  100.0, \tab Money.new(st_ask))\par
+    pledge.donations << Donation.suggest_percentage_of(@donor.id, @saver1.id, 100.0, \tab Money.new(100))\par
+    pledge.donations << Donation.suggest_percentage_of(@donor.id, @saver2.id, 100.0, \tab Money.new(100))\par
+    pledge.donations << Donation.suggest_percentage_of(@donor.id, @saver3.id, 100.0, \tab Money.new(100))\par
+    pledge.donations << Donation.suggest_percentage_of(@donor.id, @saver4.id, 100.0, \tab Money.new(100))\par
+    \par
+    pledge.save!\par
+    return pledge\par
+  end\par
+\par
+##############################################################################\par
+\par
+\\app\\models\\line_item.rb\tab\tab\tab\tab\tab # class Donation < LineItem\par
+\par
+  def \cf1 to_user_display_name\par
+\cf0     to_user.display_name\par
+  end\b\par
+\par
+\b0   def from_user_display_name\par
+    if !from_user.nil?\par
+      from_user.display_name\par
+    else\par
+      'none'\par
+    end\par
+  end\par
+\par
+##############################################################################\par
+\par
+\\config\\environment.rb\par
+\par
+  APP_URL = AppConfig.app_url\par
+\par
+\\vendor\\plugins\\community_engine\\community_engine_setup_template.rb\par
+\par
+  def modify_environment_files\par
+     app_url = ask("Please enter the url where you plan to deploy this app (use 'example.com' \tab\tab\tab for now if you don't know yet):")\par
+     environment "\\nAPP_URL = \\"http://#\{app_url\}\\"", :env => 'production'\par
+  end\par
+\par
+##############################################################################\par
+\par
+c:\\Users\\ace\\st>perl -w find.pl do-more rb\par
+\par
+found do-more in c:\\Users\\ace\\st\\config\\routes.rb\tab\tab # see \\app\\views\\donor_survey\par
+\par
+  map.do_more         '/do-more',          :controller => 'donor_surveys', :action => 'show'\par
+  \par
+found do-more in c:\\Users\\ace\\st\\test\\integration\\donor_survey_stories_test.rb\par
+\par
+found do-more in c:\\Users\\ace\\st\\test\\integration\\login_stories_test.rb\par
+\par
+found do-more in c:\\Users\\ace\\st\\test\\unit\\bread_crumb_trail_test.rb\par
+\par
+\par
+\par
+\par
+\par
+\par
+\par
+############################################################################################\par
+\pard\tx5538\par
+\pard 0) Should special message be added to donation_thanks_notification.html.haml or to donation_thanks_notification method in \\vendor\\plugins\\community_engine\\app\\models\\user_notifier.rb?\par
+\par
+1) Can we modify codes in community_engine, specifically donation_thanks_notification method in \\vendor\\plugins\\community_engine\\app\\models\\user_notifier.rb\par
+\par
+2) Can we do only functional/unit/fixture tests without creating special_messages controller, view, model and config?\par
+\par
+3) Knowing that the resulting view of donation_thanks_notification.html.haml can be verified contents of @email in \\test\\functional\\pledges_controller_test.rb; but where in both tests 'handle an ipn with no fee' and 'complete a pledge when returning to st site' are the email actually being sent? Is it the completed_donations = donor.donations_given.size?\par
+\par
+4) I see in  \\test\\functional\\organizations_controller_test.rb it actually tests @emails[0].body; are there other examples of @emails[0].body examples outside of st that you would recommend?\par
+\par
+OK\par
+\par
+base\par
+donors_surveys\par
+donors\par
+organizations\par
+\par
+savers\tab\tab\tab\tab\tab{\field{\*\fldinst{HYPERLINK "http://localhost:3000/match-savers/"}}{\fldrslt{\ul\cf2 http://localhost:3000/match-savers/}}}\f0\fs18\par
+pledges\par
+\par
+UNFINISHED\par
+\par
+common\tab\tab\tab\tab\tab\par
+layouts\tab\tab\tab\tab\tab\tab\par
+pledges/invoice/donation\tab\tab\tab\tab\par
+pledges/contributions/beneficiaries\par
+\par
+sessions\tab\tab\tab\tab\tab\tab\par
+user_notfiier\par
+users\tab\tab\tab\tab\tab\tab\par
+\par
+> ) In \\app\\views\\user_notifier\\donation_thanks_notification.html, does\par
+> @user refer to @body[:user] in user_notifier.rb?\par
+\par
+Yes, I believe it does.  You should test it out by trying different\par
+values to see what is returned.\par
+\par
+>\par
+> 2) In \\test\\unit\\donor_notifier.test,  we have @pledge.donations <<\par
+> Donation.new(:from_user => @donor, :to_user =>\par
+> users(:deserving_saver_1), :cents => "5000"); how does one extract the\par
+> to_user (that is, the saver name) or the to_user_id (that is, the\par
+> saver id)?\par
+\par
+users(:deserving_saver_1) should refer to a fixture in the\par
+test/fixtures directory.  Fixtures are commonly used in rails so you\par
+should become familiar with their use.\par
+\par
+Yes. I would also like to know how to extract saver name from Donation.\par
+\par
+>\par
+> 3) In \\vendor\\pIugins\\community_engine\\app\\models\\user_notifier.rb, in\par
+> the donation_thanks_notification(donor, pledge) what does\par
+> setup_email(donor) do? does it setup the \{from, recipient, sent_on\}\par
+> fields? if so, how can I modify this function so as to set \{from\} to\par
+> the saver's name?\par
+\par
+It does set the 'from' address.  However, we don't want to have this\par
+set to the saver's email address as a response to this email isn't set\par
+up to be picked up by anything.  So you should leave these as is.\par
+\par
+Where are recipient and sent_on set?\par
+\par
+>\par
+> 4) In \\vendor\\plugins\\community_engine\\app\\models\\user_notifier.rb, in\par
+> the donation_thanks_notification(donor, pledge), what goes into\par
+> body[:url] =  "#\{APP_URL\}"?\par
+\par
+If you do a string search for 'APP_URL' on the project you should find\par
+it being set in config/environment.rb\par
+\par
+~Yes. I see APP_URL = AppConfig.app_url, but AppConfig.app_url appear to prop up everywhere, in vendort\\rails, vendor\\plugins app\\controller; please define what AppConfig.app_url is.\par
+\par
+>\par
+> 5) In \\vendor\\plugins\\community_engine\\app\\models\\user_notifier.rb,\par
+> can I modify the donation_thanks_notification to the following so as\par
+> to take special messages?\par
+>\par
+>  def donation_thanks_notification(donor, pledge, special_msg)\par
+\par
+You could do it that way, yes.  Another possibility that wouldn't\par
+require a method signature change would be to extract the special_msg\par
+content within the method - possibly using the pledge content which\par
+should have information about which savers were donated to.\par
+\par
+If extracting special_msg from the pledge, then we should modify pledge.rb so as to contain the special_msg object? If so, what type of data structure is best for storing the special_msg?\par
+\par
+>\par
+> 6) If 5) is true, can I add it as a multipart message as follows:\par
+>\par
+>  def donation_thanks_notification(donor, pledge, special_msg)\par
+>        ...\par
+>     content_type  "multipart/alternative"\par
+>     part :content_type => "text/html",\par
+>        :body => render_message("signup-as-html", :account => special_msg)\par
+>\par
+>     part "text/plain" do |p\par
+>        p.body = render_message("signup-as-plain", :account => special_msg)\par
+>     end\par
+>  end\par
+\par
+As long as this provides the donor with one clearly stated email message.\par
+\par
+>\par
+> 7) if 6) is true, is the above the correct syntax?\par
+\par
+That's for you to figure out ;)  Try writing unit and functional tests\par
+- test driven development (where you write tests first) is a very\par
+useful strategy.\par
+\par
+@donor = Donor.new(\{:first_name => "Newt",\par
+    :last_name => "Donor",\par
+    :login => "foo@bar.com",\par
+    :login_confirmation => "foo@bar.com",\par
+    :password => "foo2thebar",\par
+    :password_confirmation => "foo2thebar",\par
+    :birthday => 21.years.ago\par
+    \})\par
+\par
+  @pledge.donations << Donation.new(:from_user => @donor, :to_user => users(:deserving_saver_1), :cents => "5000")\par
+\par
+    @pledge.donations << Donation.new(:from_user => @donor, :to_user => Organization.find_savetogether_org, :cents => "500")\par
+ @pledge.donations=> users(:deserving_saver_1), :cents => "5000")\tab\tab ??? to_user \par
+\par
+\par
+class Donation < LineItem\par
+\tab belongs_to :to_user, :class_name => 'User', :foreign_key => :to_user_id \tab\tab ???\par
+ \tab belongs_to :from_user, :class_name => 'User', :foreign_key => :from_user_id\par
+\tab .to_user_id\par
+\tab Donation.to_user_display_name\par
+\par
+notification = UserNotifier.create_donation_thanks_notification(@donor, @pledge)\par
+\par
+class Pledge \par
+\tab .donor_id           :integer(4)\tab\tab\tab\tab\par
+\tab find_line_item_with_to_user_id (to_user_id)\tab\tab\tab\tab\tab ???\par
+\par
+####################################################################\par
+\par
+user_notifier.rb ~~~~\par
+\par
+  def signup_invitation(email, user, message)\par
+      setup_sender_info\par
+    @recipients  = "#\{email\}"\par
+    @subject     = "#\{user.login\} would like you to join #\{AppConfig.community_name\}!"\par
+    @sent_on     = Time.now\par
+    @body[:user] = user\par
+    @body[:url]  = signup_by_id_url(user, user.invite_code)\par
+    @body[:message] = message\par
+  end\par
+\par
+~~~~~~~~\par
+\par
+UserNotifier.deliver_signup_invitation('"Foo Bar" <foo@bar.com>', users(:quentin), 'please join')\par
+\par
+  def donation_thanks_notification(donor, pledge)\par
+    setup_email(donor)\tab\tab\tab\tab from, recipient, sent_on\tab\tab ???  \par
+    @subject      += :notification_donation_thanks_subject.l\par
+    @body[:url]    = "#\{APP_URL\}"\tab\tab\tab\tab\tab\tab ???\par
+    @body[:amount] = pledge.total_amount\par
+    @body[:date]   = pledge.created_at\par
+\par
+  end\par
+\par
+donation_thanks_notification.html\par
+\par
+  def donation_thanks_notification(donor, pledge, special_msg)\tab\tab\tab ???\par
+    setup_email(donor)\tab\tab\tab\tab\par
+    @subject      += :notification_donation_thanks_subject.l\par
+    @body[:url]    = "#\{APP_URL\}"\tab\tab\tab\tab\tab\par
+    @body[:amount] = pledge.total_amount\par
+    @body[:date]   = pledge.created_at\par
+\par
+     content_type  "multipart/alternative"\tab\tab\tab\tab\tab    \tab ???\par
+     part :content_type => "text/html",\par
+        :body => render_message("signup-as-html", :account => special_msg) \tab ???\par
+\par
+     part "text/plain" do |p\par
+        p.body = render_message("signup-as-plain", :account => special_msg)\tab ???\par
+      end\par
+\par
+  end\par
+\par
+~~~~~~~~~\par
+\par
+notification = UserNotifier.create_donation_thanks_notification(@donor, @pledge)\par
+ assert_equal "[SaveTogether] Thank you for your donation!", notification.subject\par
+    assert_equal @donor.login, notification.to[0]\par
+    assert_match /Hi #\{@donor.first_name\},/, notification.body\par
+    assert_match /Thank you for your donation of \\$#\{@pledge.total_amount\}/, notification.body\par
+    assert_match /SaveTogether is a 501\\(c\\)\\(3\\) non-profit organization/, notification.body\par
+    assert_match /non-profit organization in good standing with the Internal Revenue Service/, notification.body\par
+    assert_match /no goods or services were provided in exchange for your contribution/, notification.body\par
+    assert_match /federal tax identification number is 26-3455579/, notification.body\par
+    assert_match /Donation Summary:/, notification.body\par
+\par
+DEPOT APPLICATION p78-84\par
+\par
+C:\\Users\\ace\\st\\vendor\\rails\\actionmailer\\lib\\action_mailer\\base.rb has \par
+\tab Multipart messages\par
+C:\\Users\\ace\\st\\vendor\\plugins\\community_engine\\app\\models\\user_notifier.rb has \tab donation_thanks_notification(donor, pledge)\par
+\tab is inherited from ActionMailer:Base\par
+C:\\Users\\ace\\st\\app\\models\\pledge.rb has \par
+\tab UserNotifier.deliver_donation_thanks_notification(donor, self)\par
+C:\\Users\\ace\\st\\test\\unit\\donor_notifier_test.rb\par
+\tab UserNotifier.create_donation_thanks_notification(@donor, @pledge)\par
+\par
+1) NEED TO WRITE NEW donation_thanks_notification in user_notifier.rb?\par
+2) NEED TO ADD NEW deliver_donation_thanks_notification in pledge.rb?\par
+3) NEED TO ADD Multipart messages to NEW donation_thanks_notification?\par
+4) NEED TO MODIFY donor_notifier_test.rb !\par
+5) ALSO, PLEASE ELABORATE HOW THE FOLLOWING 2 FILES ARE RELEVANT TO \par
+story #478?\par
+\tab app/controllers/pledge_controller.rb\par
+\tab test/functional/pledge_controller_test.rb\par
+\par
+######################################################################\par
+\cf3\par
+I think thats because the show and edit need a id param as part of the URL generator. Your better option would be to use the named routes that mapping resources gives you.\par
+\par
+Run 'rake routes' from the command line inside your rails project and will spit out all the named routes. You should get something like this:\par
+    albums GET    /albums(.:format)           \{:controller=>"albums", :action=>"index"\}\par
+           POST   /albums(.:format)           \{:controller=>"albums", :action=>"create"\}\par
+ new_album GET    /albums/new(.:format)       \{:controller=>"albums", :action=>"new"\}\par
+edit_album GET    /albums/:id/edit(.:format)  \{:controller=>"albums", :action=>"edit"\}\par
+     album GET    /albums/:id(.:format)       \{:controller=>"albums", :action=>"show"\}\par
+           PUT    /albums/:id(.:format)       \{:controller=>"albums", :action=>"update"\}\par
+           DELETE /albums/:id(.:format)       \{:controller=>"albums", :action=>"destroy"\}\par
+\cf2\par
+This gives you generators for the names in the left most column, just append _path. So index action becomes albums_path() and show becomes album_path(@album). This will call the to_param on @album and build the URL for you.\par
+\cf4\par
+rails restful\par
+ruby script/generate scaffold article title:string summary:text content:text\par
+ruby script/generate model comment comment:text article_id:integer\par
+rake db:migrate\par
+rake routes\par
+ruby script/server\cf0\par
+\par
+work> rails restful\par
+work> rails depot\par
+work> rails namelist\par
+\par
+You should be able to fork the repository without obtaining write\par
+access to my repository.  The strategy here is to fork your own\par
+version of the repo, make changes, check them in to your own\par
+repository, then send a 'pull request' to me.  Jeremy and I can then\par
+review the code and merge it into the main branch if necessary.\par
+\par
+1.) Fork tbostelmann\\st (there should be a 'fork' button in the upper\par
+right hand corner - you'll need to be logged in to do this as well).\par
+\par
+2.) Clone your version of the repo (this should be something like\par
+'eucephei\\st').\par
+\par
+git clone git@github.com:eucephei/st.git\par
+\par
+NOTE: if you have already cloned my version of the code, you can move\par
+the repository to the side (mv st st_old) so that your cloned version\par
+will replace it.  Copy config/database.yml and config/application.yml\par
+over and everything should work on your existing development database\par
+(so you don't have to re-do a lot of steps).\par
+\par
+3.) Make changes to the code as needed.  You can commit these to your\par
+local version of the repository by executing the following commands:\par
+\par
+git add .\par
+git commit -m "commit comment"\par
+\par
+4.) You might want to periodically 'push' your local changes up to\par
+your repository:\par
+\par
+git push origin master\par
+\par
+NOTE: if you push your changes up to the repository it makes it easier\par
+to talk about the changes you have made as I'll be able to look at the\par
+change history for your repository.\par
+\par
+\pard\sb100\sa100 HAML USE FILTER  p 490\par
+SAVER WRITE RESPONSE \par
+RESPONSE ADD TO HAML\par
+HAML FORWARD TO EMAIL\par
+a) MIGRATION ADD CUSTOM MESSAGE, BUT NEED A DEFAULT?\par
+Dylan, can you come up with copy for what the message should read?  I'm thinking that the current message that is sent out should just have a message at the end of it saying something like:\par
+"Here are messages from individual Savers:\par
+David says:\par
+Thank you so much for your contribution......\par
+Linda says:\par
+Thank you for helping me work towards my goal...."\par
+b) UI LET SAVER TO EDIT MESSAGE?\par
+Yes.  This should be added to the existing ui for editing saver profiles.\par
+c) DO USE 'REST'? \par
+( URL TO HAML MESSAGE  CONTROLLER\\ACTION\\CUSTOM_MESSAGE)\par
+I'm not sure I understand.  There's a trigger that initiates the email message when a donation is made that will kick off an email message.  The existing email message needs to be refactored to add the custom message.\par
+d) UPON DONATION, SEND THE CUSTOM/DEFAULT MESSAGE?\par
+Yes.\par
+script/generate plugin XXX \tab\tab # VENDOR/PLUGIN\par
+\pard\par
+First my apologies for the previous dilettante questions.\par
+\par
+1) Please do give a list of gems required for this app. ie. haml, money\par
+2) For Database support, do you have sample scripts for inserting  to Sqllite?\par
+3) ls it possible to to run the rails app without building rails app from scratch? If so, what are the best ways to proceed?  \par
+4) What additional references do you recommend to read to do the stories?\par
+\par
+VIEW\par
+\par
+app/views/user_notifier/donation_thanks_notification.html.haml\par
+\par
+CONTROLLER\par
+\par
+app/controllers/pledge_controller.rb\par
+\par
+TEST\par
+\par
+test/functional/pledge_controller_test.rb\par
+\par
+##############################################################################\par
+\par
+Regarding \b Story #478 \b0\par
+\par
+"When donors donate to a Saver, a custom message should be inserted into the 'thank you' email message (one for each saver that is donated to),"\par
+\par
+1) What is the custom message?\par
+\par
+The custom message should be a merge of the existing email and the custom message for each Saver that received a donation.\par
+ \par
+THAT IS, THE MERGE OF donation_thanks_notification.html.haml AND EXISTING EMAIL?\par
+\par
+THAT IS, INSTEAD OF STANDARDIZED donation_thanks_notification.html.haml, ONE SHOULD HAVE SAVER TO DO A CUSTOM MESSAGE.\par
+\par
+a) MIGRATION ADD CUSTOM MESSAGE TO NEED A DEFAULT\par
+b) UI LET SAVER TO EDIT MESSAGE\par
+c) DO USE 'REST'? \par
+( URL TO HAML MESSAGE  CONTROLLER\\ACTION\\CUSTOM_MESSAGE)\par
+d) UPON DONATION, SEND THE CUSTOM/DEFAULT MESSAGE\par
+\par
+2) How can donation_thanks_notification.html.haml be linked to likes of pledge_controller_test.rb or pledge_controller.rb? Spefically, is it stored in @emails?\par
+\par
+That is a good question - this is a tricky part.  In config/environments/test.rb the following lines set global variables when in the 'test' environment:\par
+\par
+config.action_mailer.perform_deliveries = true\par
+config.action_mailer.delivery_method = :test\par
+\par
+They essentially tell the base functional test class to store messages that were delivered in class variable called, appropriately, @emails.  So it just appears to magically get assigned when in fact it's a configuration option ;)\par
+ \par
+SEE AGILE ACTION MAILER p. 663\par
+\par
+3)  I have notice that some functions, like 'add_donation_to_pledge', 'update_pledge_with_donor', 'paypal_redirect_param', 'set_donor_in_pledge' in pledge_contrller was not tested pledge_controller_test.rb, should I test it?\par
+\par
+YES!  Please feel free to clean up sloppy code and create tests.  You will probably find plenty of it in this project as this was my first experience with Rails :)\par
+ \par
+4) In  pledge_controller_test.rb, why is @emails cleared immediately after ActionMailer::Base.deliveries during setup?\par
+\par
+Another good question.  I'm resetting the variable for good measure.  I just wanted to make sure I wasn't getting any other email messages being sent.  Adding a check to assert this in the test instead of avoiding it would probably have been better but I didn't get around to it.\par
+\par
+SEE AGILE ACTION MAILER p. 624 \par
+\par
+5) For existing tests in pledge_controller_test.rb, are they functional already? \par
+\par
+All tests should pass at this point.  I religiously run tests for every push (checkin).\par
+\par
+##############################################################################\par
+\par
+1) Please do give a list of gems required for this app. ie. haml, money\par
+\par
+There's a handy rake command that will tell you this:\par
+\par
+rake gems\par
+\par
+It also helps to run it while in the test environment as there are gems that are required only there:\par
+\par
+rake gems RAILS_ENV=test\par
+\par
+STUDY RAKE GEMS\par
+ \par
+2) For Database support, do you have sample scripts for inserting  to Sqllite?\par
+\par
+I do not.  My recommendation is to install Postgres (preferred) or Mysql (Mysql has a windows installer that should make it pretty straight forward).  Please let me know if you have questions about this specifically.A\par
+\par
+STUDY POSTGRES\par
+\par
+3) ls it possible to to run the rails app without building rails app from scratch? If so, what are the best ways to proceed?  \par
+\par
+Hmm...rails has a pretty good framework for getting your app up and running.  I understand there may be a few steps but my suggestion is to try to work through them and email me with questions.\par
+ \par
+NEED HELP\par
+\par
+4) What additional references do you recommend to read to do the stories?\par
+\par
+I'm not sure.  Do you have a more specific question?\par
+\par
+\par
+\par
+\par
+}
+ 
